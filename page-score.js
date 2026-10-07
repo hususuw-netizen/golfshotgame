@@ -16,6 +16,8 @@ window.createScorePageModule = function createScorePageModule(ctx) {
     getScoreRoundSaveConfig,
     getScoreRoundSaveHoles,
     canSaveScoreRoundHistory,
+    syncScoreRound,
+    confirmRoundSave,
     setFieldError,
     setActiveAppPage,
     showMessage,
@@ -24,6 +26,7 @@ window.createScorePageModule = function createScorePageModule(ctx) {
 
   let selectedPresetShots = null;
   let isCustomShotsOpen = false;
+  let isConfirmingRound = false;
 
   function resetShotEntryState() {
     selectedPresetShots = null;
@@ -34,8 +37,8 @@ window.createScorePageModule = function createScorePageModule(ctx) {
     const value = isCustomShotsOpen
       ? sanitizeNumber(elements.scoreShotsInput.value)
       : selectedPresetShots;
-    if (!Number.isFinite(value) || value <= 0) {
-      return "請輸入大於 0 的桿數。";
+    if (!Number.isInteger(value) || value <= 0) {
+      return "請輸入大於 0 的整數桿數。";
     }
     if (value > 20) {
       return "單洞桿數不能超過 20。";
@@ -176,12 +179,19 @@ window.createScorePageModule = function createScorePageModule(ctx) {
     renderAll();
   }
 
-  function saveRound() {
-    if (!canSaveScoreRoundHistory()) {
+  async function saveRound() {
+    if (isConfirmingRound || !canSaveScoreRoundHistory()) {
       return;
     }
     const config = getScoreRoundSaveConfig();
-    if (!window.confirm(`確定要儲存${config.label}本次紀錄嗎？`)) {
+    isConfirmingRound = true;
+    let confirmed;
+    try {
+      confirmed = await confirmRoundSave(`確定要儲存${config.label}本次紀錄嗎？`);
+    } finally {
+      isConfirmingRound = false;
+    }
+    if (!confirmed) {
       return;
     }
 
@@ -198,7 +208,8 @@ window.createScorePageModule = function createScorePageModule(ctx) {
       holes,
       modeType: "score"
     };
-    state.rounds = [round, ...state.rounds].slice(0, 50);
+    // Pending cloud records must survive beyond the former 50-record local cap.
+    state.rounds = [round, ...state.rounds];
 
     for (let index = config.start; index < config.end; index += 1) {
       currentScoreHoles()[index] = makeScoreHoleState(index + 1);
@@ -210,6 +221,7 @@ window.createScorePageModule = function createScorePageModule(ctx) {
     state.historyNotice = `已儲存純記桿數${config.label} round。`;
     saveCurrentUserData();
     setActiveAppPage("history");
+    syncScoreRound(round);
   }
 
   function bindEvents() {

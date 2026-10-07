@@ -19,13 +19,16 @@
     <section id="loginPanel" class="panel login-panel">
       <div class="section-head">
         <div>
-          <h2>依帳號名稱分開儲存資料</h2>
+          <h2>依學號分開儲存資料</h2>
         </div>
       </div>
       <div class="field">
-        <label for="usernameInput">使用者名稱</label>
-        <input id="usernameInput" type="text" maxlength="24" placeholder="例如：Eric">
-        <small>同一個帳號會保留個人球場與 round 紀錄。</small>
+        <label for="studentIdInput">學號</label>
+        <input id="studentIdInput" type="text" maxlength="24" autocomplete="off" autocapitalize="none" spellcheck="false">
+      </div>
+      <div class="field">
+        <label for="fullNameInput">姓名</label>
+        <input id="fullNameInput" type="text" maxlength="24" autocomplete="off">
       </div>
       <button id="loginButton" class="btn btn-primary full-width" type="button">登入</button>
       <div id="loginMessage" class="message is-error hidden"></div>
@@ -324,6 +327,8 @@
             </button>
           </div>
           <div id="exportResult" class="message is-info hidden"></div>
+          <div id="cloudSyncMessage" class="message is-info hidden" role="status" aria-live="polite"></div>
+          <button id="cloudRetryButton" class="btn btn-primary hidden" type="button">同步到後端</button>
           <div id="recentRoundsList" class="round-history-list"></div>
           <div id="recentRoundsEmpty" class="empty-note hidden">還沒有 round 歷史紀錄。</div>
         </section>
@@ -331,11 +336,33 @@
     </section>
   </main>
 
+  <dialog id="syncPasswordDialog" class="save-confirm-dialog">
+    <form method="dialog">
+      <p>輸入全班同步密碼</p>
+      <label class="field">同步密碼
+        <input id="syncPasswordInput" type="password" autocomplete="off" required maxlength="128">
+      </label>
+      <div class="save-confirm-actions">
+        <button class="btn btn-soft" type="submit" value="cancel" formnovalidate>取消</button>
+        <button class="btn btn-primary" type="submit" value="sync">確認同步</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="saveConfirmDialog" class="save-confirm-dialog">
+    <form method="dialog">
+      <p id="saveConfirmText"></p>
+      <div class="save-confirm-actions">
+        <button class="btn btn-soft" type="submit" value="cancel">取消</button>
+        <button class="btn btn-primary" type="submit" value="save">確認儲存</button>
+      </div>
+    </form>
+  </dialog>
   <script src="page-course.js"></script>
   <script src="page-play.js"></script>
   <script src="page-summary.js"></script>
   <script src="page-history.js"></script>
   <script src="page-score.js"></script>
+  <script src="cloud-sync.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

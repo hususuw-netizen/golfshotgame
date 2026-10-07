@@ -8,6 +8,7 @@ window.createHistoryPageModule = function createHistoryPageModule(ctx) {
     formatShotDistances,
     formatRoundRangeText,
     formatRoundShotsWithPar,
+    deleteCloudRound,
     saveCurrentUserData,
     showMessage
   } = ctx;
@@ -28,6 +29,7 @@ window.createHistoryPageModule = function createHistoryPageModule(ctx) {
   }
 
   function renderRoundCard(round) {
+    const syncLabels = { synced: "已同步至 Google 試算表", pending: "僅存於本機，尚未同步", error: "尚未同步，請按同步到後端", local: "僅存於本機" };
     return `
       <div class="round-history-item ${round.id === state.selectedRoundId ? "active" : ""}">
         <button class="round-delete-button" type="button" data-round-delete="${round.id}" aria-label="刪除此筆 round">×</button>
@@ -36,6 +38,7 @@ window.createHistoryPageModule = function createHistoryPageModule(ctx) {
           <span>${formatRoundLocation(round)}</span>
           <span>${formatRoundRangeText(round)}</span>
           <span>總桿 ${formatRoundShotsWithPar(round)}</span>
+          ${round.modeType === "score" ? `<span>${syncLabels[round.syncStatus] || "僅存於本機"}</span>` : ""}
         </div>
         <div class="round-history-actions">
           <button class="btn btn-accent round-action-button" type="button" data-round-export="${round.id}">匯出 CSV</button>
@@ -158,7 +161,8 @@ window.createHistoryPageModule = function createHistoryPageModule(ctx) {
   function buildRoundCsvContent(round) {
     const isScoreMode = round.modeType === "score";
     const rows = [
-      ["使用者", state.profile.username],
+      ["學號", state.profile.username],
+      ["姓名", state.profile.fullName],
       ["球場", round.courseName],
       ["Tee", round.teeName || "-"],
       ["範圍", round.roundLabel],
@@ -227,6 +231,7 @@ window.createHistoryPageModule = function createHistoryPageModule(ctx) {
         if (!window.confirm(`確定要刪除 ${roundLabel} 嗎？`)) {
           return;
         }
+        if (round && !deleteCloudRound(round)) return;
 
         state.rounds = state.rounds.filter((item) => item.id !== deleteButton.dataset.roundDelete);
         if (state.selectedRoundId === deleteButton.dataset.roundDelete) {

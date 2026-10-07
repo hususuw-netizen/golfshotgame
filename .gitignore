@@ -1,0 +1,7 @@
+# Local verification screenshots and student data must not be published.
+*.jpg
+*.png
+apps-script/*retest*.tsv
+.env
+.env.*
+node_modules/

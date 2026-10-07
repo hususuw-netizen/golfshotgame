@@ -149,6 +149,7 @@ const state = {
   historyNotice: "",
   profile: {
     username: "",
+    fullName: "",
     selectedMode: DEFAULT_MODE,
     selectedCourseId: DEFAULT_COURSE_ID,
     selectedTeeId: DEFAULT_TEE_ID
@@ -170,13 +171,16 @@ const elements = {
   menuDrawer: document.getElementById("menuDrawer"),
   appTabs: document.getElementById("appTabs"),
   appPages: Array.from(document.querySelectorAll(".app-page")),
-  usernameInput: document.getElementById("usernameInput"),
+  studentIdInput: document.getElementById("studentIdInput"),
+  fullNameInput: document.getElementById("fullNameInput"),
   loginButton: document.getElementById("loginButton"),
   loginMessage: document.getElementById("loginMessage"),
   welcomeText: document.getElementById("welcomeText"),
   logoutButton: document.getElementById("logoutButton"),
   profileMessage: document.getElementById("profileMessage"),
   exportResult: document.getElementById("exportResult"),
+  cloudSyncMessage: document.getElementById("cloudSyncMessage"),
+  cloudRetryButton: document.getElementById("cloudRetryButton"),
   modeTabs: Array.from(document.querySelectorAll(".mode-tab")),
   courseSelect: document.getElementById("courseSelect"),
   teeTabs: Array.from(document.querySelectorAll(".tee-tab")),
@@ -259,10 +263,9 @@ function initStaticText() {
   document.title = "高爾夫上果嶺紀錄工具";
   setText(".hero h1", "高爾夫上果嶺紀錄工具");
   setText(".hero-text", "依帳號、球場與 tee 分開儲存紀錄，支援 18 洞逐桿紀錄、總表與歷史匯出。");
-  setText("#loginPanel h2", "依帳號名稱分開儲存資料");
-  setText("label[for='usernameInput']", "使用者名稱");
-  setAttr("#usernameInput", "placeholder", "例如：Eric");
-  setText("#loginPanel small", "同一個帳號會保留個人球場與 round 紀錄。");
+  setText("#loginPanel h2", "依學號分開儲存資料");
+  setText("label[for='studentIdInput']", "學號");
+  setText("label[for='fullNameInput']", "姓名");
   setText("#loginButton", "登入");
   setText(".section-kicker", "使用者");
   setText("#logoutButton", "登出");
@@ -408,9 +411,12 @@ function currentScoreHole() {
   return currentScoreHoles()[state.scoreSelectedHoleIndex];
 }
 
-function validateUsername(username) {
+function validateUsername(username, fullName) {
   if (!normalizeUsername(username)) {
-    return "請輸入帳號名稱。";
+    return "請輸入學號。";
+  }
+  if (!fullName.trim()) {
+    return "請輸入姓名。";
   }
   return "";
 }
@@ -531,6 +537,32 @@ function showMessage(target, text, className) {
   target.classList.remove("hidden");
 }
 
+function requestSyncPassword() {
+  const dialog = document.getElementById("syncPasswordDialog");
+  const input = document.getElementById("syncPasswordInput");
+  input.value = "";
+  dialog.returnValue = "cancel";
+  return new Promise((resolve) => {
+    dialog.addEventListener("close", () => {
+      const password = dialog.returnValue === "sync" ? input.value : null;
+      input.value = "";
+      resolve(password);
+    }, { once: true });
+    dialog.showModal();
+    input.focus();
+  });
+}
+
+function confirmRoundSave(text) {
+  const dialog = document.getElementById("saveConfirmDialog");
+  document.getElementById("saveConfirmText").textContent = text;
+  dialog.returnValue = "cancel";
+  return new Promise((resolve) => {
+    dialog.addEventListener("close", () => resolve(dialog.returnValue === "save"), { once: true });
+    dialog.showModal();
+  });
+}
+
 function hideMessage(target) {
   target.textContent = "";
   target.classList.add("hidden");
@@ -629,6 +661,7 @@ function loadUserData(username) {
   }
 
   const data = createEmptyUserData(normalized);
+  data.fullName = typeof stored.fullName === "string" ? stored.fullName : "";
   data.selectedMode = stored.selectedMode || DEFAULT_MODE;
   data.selectedCourseId = stored.selectedCourseId || DEFAULT_COURSE_ID;
   data.selectedTeeId = stored.selectedTeeId || DEFAULT_TEE_ID;
@@ -662,6 +695,7 @@ function saveCurrentUserData() {
   localStorage.setItem(CURRENT_USER_KEY, state.profile.username);
   writeStorage(getUserStorageKey(state.profile.username), {
     username: state.profile.username,
+    fullName: state.profile.fullName,
     selectedMode: state.profile.selectedMode,
     selectedCourseId: state.profile.selectedCourseId,
     selectedTeeId: state.profile.selectedTeeId,
@@ -674,6 +708,7 @@ function saveCurrentUserData() {
 
 function applyUserData(userData) {
   state.profile.username = userData.username;
+  state.profile.fullName = userData.fullName || "";
   state.profile.selectedMode = userData.selectedMode || DEFAULT_MODE;
   state.profile.selectedCourseId = userData.selectedCourseId;
   state.profile.selectedTeeId = userData.selectedTeeId;
@@ -712,7 +747,11 @@ function loadSession() {
   if (!username) {
     return;
   }
-  applyUserData(loadUserData(username));
+  const userData = loadUserData(username);
+  if (!userData.fullName) {
+    return;
+  }
+  applyUserData(userData);
 }
 
 function isLoggedIn() {
@@ -827,6 +866,8 @@ const scorePage = window.createScorePageModule({
   getScoreRoundSaveConfig,
   getScoreRoundSaveHoles,
   canSaveScoreRoundHistory,
+  syncScoreRound: (round) => cloudSync.queueRound(round),
+  confirmRoundSave,
   setFieldError,
   setActiveAppPage,
   showMessage,
@@ -842,9 +883,15 @@ const historyPage = window.createHistoryPageModule({
   formatShotDistances,
   formatRoundRangeText,
   formatRoundShotsWithPar,
+  deleteCloudRound: (round) => cloudSync.queueDelete(round),
   saveCurrentUserData,
   showMessage
 });
+
+const cloudSync = window.createCloudSync({ state, elements, readStorage, saveCurrentUserData, renderRecentRounds, showMessage, requestSyncPassword });
+if (cloudSync.enabled) {
+  setText(".history-warning", "純記桿數先儲存在本機，按「同步到後端」才會上傳或同步刪除。模擬球場紀錄保存在本機，可匯出 CSV 備份。");
+}
 
 function renderAppVisibility() {
   elements.heroPanel.classList.toggle("hidden", isLoggedIn());
@@ -882,7 +929,7 @@ function renderMenuState() {
 }
 
 function renderProfile() {
-  elements.welcomeText.textContent = state.profile.username;
+  elements.welcomeText.textContent = `${state.profile.username} ${state.profile.fullName}`;
 }
 
 function renderCourseSelect() { return coursePage.renderCourseSelect(); }
@@ -923,22 +970,34 @@ function renderAll() {
   renderRecentRounds();
 }
 
-function handleLogin() {
-  const username = normalizeUsername(elements.usernameInput.value);
-  const error = validateUsername(username);
+async function handleLogin() {
+  const username = normalizeUsername(elements.studentIdInput.value);
+  const fullName = elements.fullNameInput.value.trim();
+  const error = validateUsername(username, fullName);
   if (error) {
     showMessage(elements.loginMessage, error, "is-error");
     return;
   }
+  elements.loginButton.disabled = true;
+  try {
+    await cloudSync.login(username, fullName);
+  } catch (error) {
+    showMessage(elements.loginMessage, error.message, "is-error");
+    elements.loginButton.disabled = false;
+    return;
+  }
+  elements.loginButton.disabled = false;
   hideMessage(elements.loginMessage);
   ensureUserInIndex(username);
   applyUserData(loadUserData(username));
+  state.profile.fullName = fullName;
   state.activeAppPage = "course";
   state.isMenuOpen = false;
   state.isCourseDetailsOpen = false;
   saveCurrentUserData();
   renderAll();
-  showMessage(elements.profileMessage, `已登入 ${username}。`, "is-info");
+  showMessage(elements.profileMessage, `已登入 ${username} ${fullName}。`, "is-info");
+  void cloudSync.loadHistory();
 }
 
 function bindEvents() {
@@ -968,7 +1027,13 @@ function bindEvents() {
     }
   });
   elements.logoutButton.addEventListener("click", () => {
+    cloudSync.logout();
+    hideMessage(elements.cloudSyncMessage);
+    elements.cloudRetryButton.classList.add("hidden");
     state.profile.username = "";
+    state.profile.fullName = "";
+    elements.studentIdInput.value = "";
+    elements.fullNameInput.value = "";
     state.profile.selectedMode = DEFAULT_MODE;
     state.profile.selectedCourseId = DEFAULT_COURSE_ID;
     state.profile.selectedTeeId = DEFAULT_TEE_ID;
@@ -1007,7 +1072,8 @@ function bindEvents() {
 }
 
 initStaticText();
-loadSession();
+// Cloud login must be validated by the roster; local-only pages keep their existing session behavior.
+if (!cloudSync.enabled) loadSession();
 if (!Array.isArray(state.scoreHoles) || state.scoreHoles.length !== 18) {
   state.scoreHoles = createEmptyScoreHoles();
 }
