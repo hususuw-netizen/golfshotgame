@@ -5,3 +5,5 @@ apps-script/*retest*.tsv
 .env
 .env.*
 node_modules/
+.local/
+apps-script/project.json
