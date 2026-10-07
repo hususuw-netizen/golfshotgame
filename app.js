@@ -537,22 +537,6 @@ function showMessage(target, text, className) {
   target.classList.remove("hidden");
 }
 
-function requestSyncPassword() {
-  const dialog = document.getElementById("syncPasswordDialog");
-  const input = document.getElementById("syncPasswordInput");
-  input.value = "";
-  dialog.returnValue = "cancel";
-  return new Promise((resolve) => {
-    dialog.addEventListener("close", () => {
-      const password = dialog.returnValue === "sync" ? input.value : null;
-      input.value = "";
-      resolve(password);
-    }, { once: true });
-    dialog.showModal();
-    input.focus();
-  });
-}
-
 function confirmRoundSave(text) {
   const dialog = document.getElementById("saveConfirmDialog");
   document.getElementById("saveConfirmText").textContent = text;
@@ -888,7 +872,7 @@ const historyPage = window.createHistoryPageModule({
   showMessage
 });
 
-const cloudSync = window.createCloudSync({ state, elements, readStorage, saveCurrentUserData, renderRecentRounds, showMessage, requestSyncPassword });
+const cloudSync = window.createCloudSync({ state, elements, readStorage, saveCurrentUserData, renderRecentRounds, showMessage });
 if (cloudSync.enabled) {
   setText(".history-warning", "純記桿數先儲存在本機，按「同步到後端」才會上傳或同步刪除。模擬球場紀錄保存在本機，可匯出 CSV 備份。");
 }

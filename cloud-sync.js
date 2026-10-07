@@ -1,5 +1,5 @@
 window.createCloudSync = function createCloudSync(ctx) {
-  const { state, elements, readStorage, saveCurrentUserData, renderRecentRounds, showMessage, requestSyncPassword } = ctx;
+  const { state, elements, readStorage, saveCurrentUserData, renderRecentRounds, showMessage } = ctx;
   const enabled = Boolean(window.google && window.google.script && window.google.script.run);
   let token = '';
   let generation = 0;
@@ -66,14 +66,6 @@ window.createCloudSync = function createCloudSync(ctx) {
     if (!id) return;
     if (!sessionToken) { status('請重新登入以連接 Google 試算表；本機紀錄仍保留。', true); return; }
     try {
-      let password;
-      if (upload) {
-        password = await requestSyncPassword();
-        if (!active()) return;
-        if (password === null) { status('已取消同步，資料仍保留在本機。'); return; }
-        await call('checkSyncPassword', sessionToken, password);
-        if (!active()) return;
-      }
       status(upload ? '正在同步純記桿數紀錄…' : '正在讀取後端歷史紀錄…');
       // Include pending history restored from storage, but never upload simulation records or old local-only history automatically.
       for (const round of upload ? state.rounds.filter(item => item.modeType === 'score' && ['pending', 'error'].includes(item.syncStatus)) : []) {
@@ -85,7 +77,7 @@ window.createCloudSync = function createCloudSync(ctx) {
       const operations = upload ? readQueue(id) : [];
       for (const item of operations) {
         if (!active()) return;
-        const result = await call(item.action === 'delete' ? 'deleteScoreRound' : 'saveScoreRound', sessionToken, item.action === 'delete' ? item.id : item.round, password);
+        const result = await call(item.action === 'delete' ? 'deleteScoreRound' : 'saveScoreRound', sessionToken, item.action === 'delete' ? item.id : item.round);
         if (!result || !result.ok) throw new Error('試算表尚未確認儲存成功。');
         // Remove only this operation, preserving anything queued while awaiting the server.
         writeQueue(id, readQueue(id).filter(entry => !(entry.id === item.id && entry.action === item.action)));

@@ -120,21 +120,8 @@ function validateRound_(round) {
   return { date: date.toISOString(), label: range[2], scores, total: scores.reduce((sum, value) => sum + Number(value || 0), 0) };
 }
 
-function requireSyncPassword_(password) {
-  const expected = PropertiesService.getScriptProperties().getProperty('CLASS_SYNC_PASSWORD');
-  if (!expected) throw new Error('老師尚未設定同步密碼，請先設定 CLASS_SYNC_PASSWORD。');
-  if (typeof password !== 'string' || password !== expected) throw new Error('同步密碼錯誤，資料尚未上傳。');
-}
-
-function checkSyncPassword(token, password) {
-  session_(token);
-  requireSyncPassword_(password);
-  return { ok: true };
-}
-
-function saveScoreRound(token, round, password) {
+function saveScoreRound(token, round) {
   const student = session_(token);
-  requireSyncPassword_(password);
   const data = validateRound_(round);
   return withLock_(() => {
     const sheet = getRecords_();
@@ -162,9 +149,8 @@ function listScoreRounds(token) {
     })).sort((a, b) => b.date.localeCompare(a.date)));
 }
 
-function deleteScoreRound(token, roundId, password) {
+function deleteScoreRound(token, roundId) {
   const student = session_(token);
-  requireSyncPassword_(password);
   return withLock_(() => {
     const sheet = getRecords_();
     const rows = rows_(sheet);

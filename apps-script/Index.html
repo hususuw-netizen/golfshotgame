@@ -1574,18 +1574,6 @@ select {
     </section>
   </main>
 
-  <dialog id="syncPasswordDialog" class="save-confirm-dialog">
-    <form method="dialog">
-      <p>輸入全班同步密碼</p>
-      <label class="field">同步密碼
-        <input id="syncPasswordInput" type="password" autocomplete="off" required maxlength="128">
-      </label>
-      <div class="save-confirm-actions">
-        <button class="btn btn-soft" type="submit" value="cancel" formnovalidate>取消</button>
-        <button class="btn btn-primary" type="submit" value="sync">確認同步</button>
-      </div>
-    </form>
-  </dialog>
   <dialog id="saveConfirmDialog" class="save-confirm-dialog">
     <form method="dialog">
       <p id="saveConfirmText"></p>
@@ -2725,7 +2713,7 @@ window.createScorePageModule = function createScorePageModule(ctx) {
 </script>
   <script>
 window.createCloudSync = function createCloudSync(ctx) {
-  const { state, elements, readStorage, saveCurrentUserData, renderRecentRounds, showMessage, requestSyncPassword } = ctx;
+  const { state, elements, readStorage, saveCurrentUserData, renderRecentRounds, showMessage } = ctx;
   const enabled = Boolean(window.google && window.google.script && window.google.script.run);
   let token = '';
   let generation = 0;
@@ -2792,14 +2780,6 @@ window.createCloudSync = function createCloudSync(ctx) {
     if (!id) return;
     if (!sessionToken) { status('請重新登入以連接 Google 試算表；本機紀錄仍保留。', true); return; }
     try {
-      let password;
-      if (upload) {
-        password = await requestSyncPassword();
-        if (!active()) return;
-        if (password === null) { status('已取消同步，資料仍保留在本機。'); return; }
-        await call('checkSyncPassword', sessionToken, password);
-        if (!active()) return;
-      }
       status(upload ? '正在同步純記桿數紀錄…' : '正在讀取後端歷史紀錄…');
       // Include pending history restored from storage, but never upload simulation records or old local-only history automatically.
       for (const round of upload ? state.rounds.filter(item => item.modeType === 'score' && ['pending', 'error'].includes(item.syncStatus)) : []) {
@@ -2811,7 +2791,7 @@ window.createCloudSync = function createCloudSync(ctx) {
       const operations = upload ? readQueue(id) : [];
       for (const item of operations) {
         if (!active()) return;
-        const result = await call(item.action === 'delete' ? 'deleteScoreRound' : 'saveScoreRound', sessionToken, item.action === 'delete' ? item.id : item.round, password);
+        const result = await call(item.action === 'delete' ? 'deleteScoreRound' : 'saveScoreRound', sessionToken, item.action === 'delete' ? item.id : item.round);
         if (!result || !result.ok) throw new Error('試算表尚未確認儲存成功。');
         // Remove only this operation, preserving anything queued while awaiting the server.
         writeQueue(id, readQueue(id).filter(entry => !(entry.id === item.id && entry.action === item.action)));
@@ -3395,22 +3375,6 @@ function showMessage(target, text, className) {
   target.classList.remove("hidden");
 }
 
-function requestSyncPassword() {
-  const dialog = document.getElementById("syncPasswordDialog");
-  const input = document.getElementById("syncPasswordInput");
-  input.value = "";
-  dialog.returnValue = "cancel";
-  return new Promise((resolve) => {
-    dialog.addEventListener("close", () => {
-      const password = dialog.returnValue === "sync" ? input.value : null;
-      input.value = "";
-      resolve(password);
-    }, { once: true });
-    dialog.showModal();
-    input.focus();
-  });
-}
-
 function confirmRoundSave(text) {
   const dialog = document.getElementById("saveConfirmDialog");
   document.getElementById("saveConfirmText").textContent = text;
@@ -3746,7 +3710,7 @@ const historyPage = window.createHistoryPageModule({
   showMessage
 });
 
-const cloudSync = window.createCloudSync({ state, elements, readStorage, saveCurrentUserData, renderRecentRounds, showMessage, requestSyncPassword });
+const cloudSync = window.createCloudSync({ state, elements, readStorage, saveCurrentUserData, renderRecentRounds, showMessage });
 if (cloudSync.enabled) {
   setText(".history-warning", "純記桿數先儲存在本機，按「同步到後端」才會上傳或同步刪除。模擬球場紀錄保存在本機，可匯出 CSV 備份。");
 }

@@ -27,9 +27,7 @@ const book = { getSheetByName: name => sheets.get(name), insertSheet: name => { 
 const cache = new Map();
 let uuid = 0;
 let activeEmail = 'owner@example.test';
-let classPassword = 'test-only-password';
 const backend = vm.createContext({
-  PropertiesService: { getScriptProperties: () => ({ getProperty: () => classPassword }) },
   Session: { getActiveUser: () => ({ getEmail: () => activeEmail }), getEffectiveUser: () => ({ getEmail: () => 'owner@example.test' }) },
   SpreadsheetApp: { openById: () => book, flush() {} },
   Utilities: { getUuid: () => `uuid-${++uuid}` },
@@ -50,27 +48,24 @@ assert.throws(() => backend.loginStudent('0010','乙'), /不符合/);
 const makeRound = (id, mode = 'front') => ({ id, date:'2026-10-01T01:00:00.000Z', modeType:'score', roundMode:mode,
   holes:Array.from({length:mode === 'full' ? 18 : 9}, (_,i) => ({hole: i + (mode === 'back' ? 10 : 1), par:2, savedRecord:{shots:3}})) });
 const front = makeRound('round-1');
-assert.throws(() => backend.saveScoreRound(a.token,front), /密碼錯誤/);
-assert.throws(() => backend.deleteScoreRound(a.token,'round-1','wrong'), /密碼錯誤/);
-classPassword = '';
-assert.throws(() => backend.checkSyncPassword(a.token,'anything'), /尚未設定/);
-classPassword = 'test-only-password';
-backend.saveScoreRound(a.token,front,classPassword);
-backend.saveScoreRound(a.token,front,classPassword);
+assert.throws(() => backend.saveScoreRound('invalid-token',front), /重新登入/);
+assert.throws(() => backend.deleteScoreRound('invalid-token','round-1'), /重新登入/);
+backend.saveScoreRound(a.token,front);
+backend.saveScoreRound(a.token,front);
 assert.equal(sheets.get('純記桿數紀錄').rows.length,2,'idempotent saves');
-backend.saveScoreRound(b.token,makeRound('round-2','back'),classPassword);
+backend.saveScoreRound(b.token,makeRound('round-2','back'));
 assert.equal(sheets.get('純記桿數紀錄').rows[1][1],'0002','numeric student sorting');
 assert.equal(backend.listScoreRounds(a.token).length,1,'student isolation');
 assert.equal(backend.listScoreRounds(b.token)[0].holes[0].hole,10,'back nine mapping');
-assert.throws(() => backend.saveScoreRound(b.token,front,classPassword), /已被使用/);
-assert.throws(() => backend.saveScoreRound(a.token,{...front,id:'round-sim',modeType:'simulation'},classPassword), /僅接受/);
-assert.throws(() => backend.saveScoreRound(a.token,{...front,id:'round-bad',holes:[]},classPassword), /洞數/);
+assert.throws(() => backend.saveScoreRound(b.token,front), /已被使用/);
+assert.throws(() => backend.saveScoreRound(a.token,{...front,id:'round-sim',modeType:'simulation'}), /僅接受/);
+assert.throws(() => backend.saveScoreRound(a.token,{...front,id:'round-bad',holes:[]}), /洞數/);
 const decimal = makeRound('round-decimal'); decimal.holes[0].savedRecord.shots = 1.5;
-assert.throws(() => backend.saveScoreRound(a.token,decimal,classPassword), /整數/);
-backend.deleteScoreRound(b.token,'round-1',classPassword);
+assert.throws(() => backend.saveScoreRound(a.token,decimal), /整數/);
+backend.deleteScoreRound(b.token,'round-1');
 assert.equal(backend.listScoreRounds(a.token).length,1,'cannot delete another student');
-backend.deleteScoreRound(a.token,'round-1',classPassword);
-backend.saveScoreRound(a.token,front,classPassword);
+backend.deleteScoreRound(a.token,'round-1');
+backend.saveScoreRound(a.token,front);
 assert.equal(backend.listScoreRounds(a.token).length,0,'retry cannot resurrect deleted rows');
 assert.equal(backend.compareStudentIds_('9','100'),-2);
 assert.ok(backend.compareStudentIds_('9007199254740993','9007199254740992') > 0,'large IDs sort without numeric precision loss');
@@ -97,7 +92,6 @@ const client = vm.createContext({ window: { google:{script:{run:runner()}}, addE
   localStorage: { setItem: (k,v) => storage.set(k,v) }, setTimeout, clearTimeout, console });
 vm.runInContext(fs.readFileSync('cloud-sync.js','utf8'),client);
 const sync = client.window.createCloudSync({ state, elements,
-  requestSyncPassword: async () => classPassword,
   readStorage: (k, fallback) => storage.has(k) ? JSON.parse(storage.get(k)) : fallback,
   saveCurrentUserData() {}, renderRecentRounds() {}, showMessage: (target,text) => { target.text = text; } });
 await sync.login('0010','甲');
